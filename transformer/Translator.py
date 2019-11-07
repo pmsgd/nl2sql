@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from transformer.Models import Transformer
-from transformer.Beam import Beam
 
 class Translator(object):
     ''' Load with trained model and handle the beam search '''

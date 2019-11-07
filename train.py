@@ -18,12 +18,52 @@ from transformer.Optim import ScheduledOptim
 from torchtext import data as textdata
 from torchtext.datasets import TranslationDataset
 
+
+class BatchWrapper:
+    def __init__(self, dl, fields, device=None):
+        self.dl = dl
+        self.fields = fields
+        self.device = device
+
+        self.xpad = self.fields[0][1].vocab.stoi[Constants.PAD_WORD]
+        self.ypad = Constants.PAD
+
+    def __iter__(self):
+        for batch in self.dl:
+            x = getattr(batch, self.fields[0][0])
+            y = getattr(batch, self.fields[1][0])
+
+            yield self.paired_collate_fn(x, y)
+
+    def __len__(self):
+        return len(self.dl)
+
+    def paired_collate_fn(self, src_insts, tgt_insts):
+        src_insts = self.collate_fn(src_insts, self.xpad)
+        tgt_insts = self.collate_fn(tgt_insts, self.ypad)
+        return (*src_insts, *tgt_insts)
+
+    def collate_fn(self, insts, pad):
+        ''' Pad the instance to the max seq length in batch '''
+
+        batch_seq = torch.t(insts)
+
+        batch_pos = torch.LongTensor([
+            [pos_i+1 if w_i != pad else 0
+             for pos_i, w_i in enumerate(inst)] for inst in batch_seq])
+
+        batch_seq = torch.LongTensor(batch_seq)
+
+        return batch_seq.to(self.device), batch_pos.to(self.device)
+
+
 def cal_performance(pred, gold, smoothing=False):
     ''' Apply label smoothing if needed '''
 
     loss = cal_loss(pred, gold, smoothing)
 
     pred = pred.max(1)[1]
+
     gold = gold.contiguous().view(-1)
     non_pad_mask = gold.ne(Constants.PAD)
     n_correct = pred.eq(gold)
@@ -68,7 +108,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing):
             desc='  - (Training)   ', leave=False):
 
         # prepare data
-        src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
+        src_seq, src_pos, tgt_seq, tgt_pos = batch
         gold = tgt_seq[:, 1:]
 
         # forward
@@ -109,7 +149,7 @@ def eval_epoch(model, validation_data, device):
                 desc='  - (Validation) ', leave=False):
 
             # prepare data
-            src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
+            src_seq, src_pos, tgt_seq, tgt_pos = batch
             gold = tgt_seq[:, 1:]
 
             # forward
@@ -195,10 +235,16 @@ def train(model, training_data, validation_data, optimizer, opt):
 # 5. use padding sort len(text)
 # 6. create vocabularies
 # 7. split into batches
+
+# TODO optional lowercase ?
 def prepare_dataloaders(opt):
-    en = textdata.Field(tokenize='spacy', tokenizer_language='en')
+    en = textdata.Field(tokenize='spacy', tokenizer_language='en',
+                        init_token=Constants.BOS_WORD, eos_token=Constants.EOS_WORD,
+                        pad_token=Constants.PAD_WORD, unk_token=Constants.UNK_WORD)
     sql_tokenizer = lambda x: x.split(Constants.SQL_SEPARATOR)
-    sql = textdata.Field(tokenize=sql_tokenizer)
+    sql = textdata.ReversibleField(tokenize=sql_tokenizer,
+                         init_token=Constants.BOS_WORD, eos_token=Constants.EOS_WORD,
+                         pad_token=Constants.PAD_WORD, unk_token=Constants.UNK_WORD)
     fields = [('en', en), ('sql', sql)]
 
     ds_train = TranslationDataset(path=opt.train_data,
@@ -208,7 +254,6 @@ def prepare_dataloaders(opt):
                                   exts=('.en', '.sql'),
                                   fields=fields)
 
-    # TODO shared vocabs ?
     en.build_vocab(ds_train, max_size=80000)
     sql.build_vocab(ds_train, max_size=40000)
 
@@ -221,7 +266,10 @@ def prepare_dataloaders(opt):
                                           sort_key=lambda x: len(x.en),
                                           device=opt.device)
 
-    return train_iter, validation_iter, en, sql
+
+    return BatchWrapper(train_iter, fields, device=opt.device),\
+           BatchWrapper(validation_iter, fields, device=opt.device),\
+           en, sql
 
 def main():
     ''' Main function '''
