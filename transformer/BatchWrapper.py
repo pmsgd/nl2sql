@@ -39,6 +39,6 @@ class BatchWrapper:
             [pos_i+1 if w_i != pad else 0
              for pos_i, w_i in enumerate(inst)] for inst in batch_seq])
 
-        batch_seq = torch.LongTensor(batch_seq)
+        batch_seq = batch_seq.long()
 
         return batch_seq.to(self.device), batch_pos.to(self.device)

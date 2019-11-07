@@ -12,17 +12,30 @@ Install spacy en model:
 python3 -m spacy download en
 ```
 
-# Training
+# Data preprocessing
 
-Run training on local machine:
+Run preprocessing python script for all datasets:
 
 ```bash
-python3 train.py --train_data dataset.dev --validation_data dataset.dev --no_cuda
+mkdir inputsets outputsets models
+
+python3 preprocess.py --queries ../WikiSQL/data/dev.jsonl --tables ../WikiSQL/data/dev.tables.jsonl --output inputsets/dev
+python3 preprocess.py --queries ../WikiSQL/data/train.jsonl --tables ../WikiSQL/data/train.tables.jsonl --output inputsets/train
+python3 preprocess.py --queries ../WikiSQL/data/test.jsonl --tables ../WikiSQL/data/test.tables.jsonl --output inputsets/test
 ```
 
-# TODO
+# Training
 
-1. extract en sentence to csv
-2. extract sql metadata and transform them into csv (custom separator for better tokenization ?)
-8. train/validate
-9. create cli? tool for translation
+Run training on local machine (with --no_cuda if CUDA enabled GPU is missing):
+
+```bash
+python3 train.py --train_data inputsets/train --validation_data inputsets/test --save_model models/model
+```
+
+# Translation
+
+Run translation on local machine (with --no_cuda if CUDA enabled GPU is missing):
+
+```bash
+python3 translate.py --src inputsets/dev.en --model models/model
+```

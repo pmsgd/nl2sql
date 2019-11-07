@@ -16,7 +16,7 @@ import io
 
 def load_model(opt):
     # TODO not working with save mode 'all'
-    checkpoint = torch.load(opt.model + '.chkpt')
+    checkpoint = torch.load(opt.model + '.chkpt', map_location=opt.device)
     model_opt = checkpoint['settings']
 
     model = Transformer(
@@ -41,8 +41,8 @@ def load_model(opt):
 
 
 def load_vocabs(opt):
-    en_vocab = torch.load(opt.model + '_en.vocab')
-    sql_vocab = torch.load(opt.model + '_sql.vocab')
+    en_vocab = torch.load(opt.model + '_en.vocab', map_location=opt.device)
+    sql_vocab = torch.load(opt.model + '_sql.vocab', map_location=opt.device)
 
     return en_vocab, sql_vocab
 
