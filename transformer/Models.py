@@ -73,7 +73,7 @@ class Encoder(nn.Module):
                                   src_key_padding_mask=non_pad_mask)
 
         # print(enc_output)
-        return enc_output.permute(1, 0, 2),
+        return enc_output,
 
 
 class Decoder(nn.Module):
@@ -108,8 +108,9 @@ class Decoder(nn.Module):
         # -- Forward
         dec_output = self.tgt_word_emb(tgt_seq) + self.position_enc(tgt_pos)
 
-        dec_output = self.decoder(dec_output.permute(1, 0, 2),
-                                  enc_output.permute(1, 0, 2),
+        dec_output = dec_output.permute(1, 0, 2)
+        dec_output = self.decoder(dec_output,
+                                  enc_output,
                                   tgt_key_padding_mask=non_pad_mask,
                                   memory_key_padding_mask=dec_enc_attn_mask)
 
