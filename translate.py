@@ -25,8 +25,6 @@ def load_model(opt):
         model_opt.max_token_seq_len,
         tgt_emb_prj_weight_sharing=model_opt.proj_share_weight,
         emb_src_tgt_weight_sharing=False,
-        d_k=model_opt.d_k,
-        d_v=model_opt.d_v,
         d_model=model_opt.d_model,
         d_word_vec=model_opt.d_word_vec,
         d_inner=model_opt.d_inner_hid,

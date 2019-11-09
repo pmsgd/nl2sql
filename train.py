@@ -248,8 +248,6 @@ def main():
 
     parser.add_argument('--d_model', type=int, default=512)
     parser.add_argument('--d_inner_hid', type=int, default=2048)
-    parser.add_argument('--d_k', type=int, default=64)
-    parser.add_argument('--d_v', type=int, default=64)
 
     parser.add_argument('--n_head', type=int, default=8)
     parser.add_argument('--n_layers', type=int, default=6)
@@ -291,8 +289,6 @@ def main():
         opt.max_token_seq_len,
         tgt_emb_prj_weight_sharing=opt.proj_share_weight,
         emb_src_tgt_weight_sharing=False,
-        d_k=opt.d_k,
-        d_v=opt.d_v,
         d_model=opt.d_model,
         d_word_vec=opt.d_word_vec,
         d_inner=opt.d_inner_hid,
