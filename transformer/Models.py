@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import math
 import transformer.Constants as Constants
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerDecoderLayer, \
     TransformerEncoder, TransformerDecoder
@@ -15,25 +16,48 @@ def get_non_pad_mask(seq):
     return seq.eq(Constants.PAD)
 
 
-def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
-    ''' Sinusoid position encoding table '''
+class PositionalEncoding(nn.Module):
+    r"""Inject some information about the relative or absolute position of the tokens
+        in the sequence. The positional encodings have the same dimension as
+        the embeddings, so that the two can be summed. Here, we use sine and cosine
+        functions of different frequencies.
+    .. math::
+        \text{PosEncoder}(pos, 2i) = sin(pos/10000^(2i/d_model))
+        \text{PosEncoder}(pos, 2i+1) = cos(pos/10000^(2i/d_model))
+        \text{where pos is the word position and i is the embed idx)
+    Args:
+        d_model: the embed dim (required).
+        dropout: the dropout value (default=0.1).
+        max_len: the max. length of the incoming sequence (default=5000).
+    Examples:
+        >>> pos_encoder = PositionalEncoding(d_model)
+    """
 
-    def cal_angle(position, hid_idx):
-        return position / np.power(10000, 2 * (hid_idx // 2) / d_hid)
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
 
-    def get_posi_angle_vec(position):
-        return [cal_angle(position, hid_j) for hid_j in range(d_hid)]
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
 
-    sinusoid_table = np.array([get_posi_angle_vec(pos_i) for pos_i in range(n_position)])
+    def forward(self, x):
+        r"""Inputs of forward function
+        Args:
+            x: the sequence fed to the positional encoder model (required).
+        Shape:
+            x: [sequence length, batch size, embed dim]
+            output: [sequence length, batch size, embed dim]
+        Examples:
+            >>> output = pos_encoder(x)
+        """
 
-    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
-    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
-
-    if padding_idx is not None:
-        # zero vector for padding dimension
-        sinusoid_table[padding_idx] = 0.
-
-    return torch.FloatTensor(sinusoid_table)
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
 
 
 class Encoder(nn.Module):
@@ -46,14 +70,10 @@ class Encoder(nn.Module):
             d_model, d_inner, dropout=0.1):
         super().__init__()
 
-        n_position = len_max_seq + 1
-
         self.src_word_emb = nn.Embedding(
             n_src_vocab, d_word_vec, padding_idx=Constants.PAD)
 
-        self.position_enc = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
-            freeze=True)
+        self.position_enc = PositionalEncoding(d_model)
 
         self.encoder = TransformerEncoder(
             TransformerEncoderLayer(d_model, n_head, dim_feedforward=d_inner, dropout=dropout),
@@ -66,7 +86,8 @@ class Encoder(nn.Module):
         non_pad_mask = get_non_pad_mask(src_seq)
 
         # -- Forward
-        enc_output = self.src_word_emb(src_seq) + self.position_enc(src_pos)
+        enc_output = self.src_word_emb(src_seq)
+        enc_output = self.position_enc(enc_output)
 
         enc_output = enc_output.permute(1, 0, 2)
         enc_output = self.encoder(enc_output,
@@ -85,14 +106,11 @@ class Decoder(nn.Module):
             n_layers, n_head,
             d_model, d_inner, dropout=0.1):
         super().__init__()
-        n_position = len_max_seq + 1
 
         self.tgt_word_emb = nn.Embedding(
             n_tgt_vocab, d_word_vec, padding_idx=Constants.PAD)
 
-        self.position_enc = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
-            freeze=True)
+        self.position_enc = PositionalEncoding(d_model)
 
         self.decoder = TransformerDecoder(
             TransformerDecoderLayer(d_model, n_head, dim_feedforward=d_inner, dropout=dropout),
@@ -106,7 +124,8 @@ class Decoder(nn.Module):
         dec_enc_attn_mask = get_non_pad_mask(src_seq)
 
         # -- Forward
-        dec_output = self.tgt_word_emb(tgt_seq) + self.position_enc(tgt_pos)
+        dec_output = self.tgt_word_emb(tgt_seq)
+        dec_output = self.position_enc(dec_output)
 
         dec_output = dec_output.permute(1, 0, 2)
         dec_output = self.decoder(dec_output,

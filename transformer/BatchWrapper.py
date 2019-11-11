@@ -9,6 +9,9 @@ class BatchWrapper:
         self.fields = fields
         self.device = device
 
+        if len(self.fields) > 1:
+            assert Constants.PAD == self.fields[1][1].vocab.stoi[Constants.PAD_WORD]
+
         self.xpad = self.fields[0][1].vocab.stoi[Constants.PAD_WORD]
         self.ypad = Constants.PAD
 
